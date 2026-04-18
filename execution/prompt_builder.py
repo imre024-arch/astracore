@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from pathlib import Path
 
 from core.exceptions import PromptBudgetError
@@ -35,12 +36,18 @@ def build_prompt(
         rules_str = "\n".join(f"- {r}" for r in r_list) or "(none)"
         failures_str = "\n".join(f"- {f}" for f in failure_list) or "(none)"
         ctx_str = "\n".join(f"{k}: {v}" for k, v in c_list) or "(empty)"
-        return template.format(
-            input=input_data,
-            skills=skills_str,
-            rules=rules_str,
-            failure_patterns=failures_str,
-            context=ctx_str,
+        substitutions = {
+            "input": input_data,
+            "skills": skills_str,
+            "rules": rules_str,
+            "failure_patterns": failures_str,
+            "context": ctx_str,
+        }
+        # Regex replacement so JSON braces in prompt templates are left untouched.
+        return re.sub(
+            r"\{(" + "|".join(substitutions.keys()) + r")\}",
+            lambda m: substitutions[m.group(1)],
+            template,
         )
 
     prompt = assemble(skill_list, rule_list, ctx_entries)

@@ -16,7 +16,7 @@ class AgentRuntime:
         self._tool_call_count = 0
 
         override = os.getenv("MAX_TOOL_CALLS_OVERRIDE")
-        if override is not None:
+        if override:
             self._max_tool_calls = int(override)
         else:
             self._max_tool_calls = config.get("limits", {}).get(
@@ -27,10 +27,18 @@ class AgentRuntime:
         from execution.prompt_builder import build_prompt
         from execution.response_parser import parse_response
 
+        name = self.config["name"]
+        logger.debug("[AGENT →] %s | input (%d chars): %s", name, len(input_data), input_data[:300])
+
         self._tool_call_count = 0
         prompt = build_prompt(self.config, self.skills, input_data, context or {})
         raw = self.llm.generate(prompt, system=self.config.get("system"))
-        return parse_response(raw, self.config["output_format"])
+        result = parse_response(raw, self.config["output_format"])
+
+        preview = result[:300] if isinstance(result, str) else str(result)[:300]
+        logger.debug("[AGENT ←] %s | output (%d chars): %s", name, len(str(result)), preview)
+
+        return result
 
     def call_tool(self, tool_name: str, params: dict, context: dict) -> str:
         from loaders.tool_loader import execute_tool
@@ -41,4 +49,5 @@ class AgentRuntime:
                 f"({self._max_tool_calls}). Skipping tool '{tool_name}'."
             )
         self._tool_call_count += 1
+        logger.debug("[TOOL] %s calling %s | params: %s", self.config["name"], tool_name, params)
         return execute_tool(tool_name, params, context)

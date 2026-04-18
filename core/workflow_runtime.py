@@ -41,10 +41,12 @@ def _run_agent_step(agent_name: str, context: dict) -> dict:
         else:
             context[f"{agent_name}_output"] = result
             context["last_output"] = result
-    except PromptBudgetError:
-        raise
+    except PromptBudgetError as e:
+        logger.warning("[%s] PromptBudgetError, skipping step: %s", agent_name, e)
     except ToolLimitExceeded as e:
         logger.warning("[%s] ToolLimitExceeded: %s", agent_name, e)
+    except ValueError as e:
+        logger.warning("[%s] Bad LLM response, skipping step: %s", agent_name, e)
 
     return context
 
@@ -65,13 +67,13 @@ def execute_action(action: str, context: dict) -> dict:
 
         from core.skill_system import update_skills
 
-        feedback = context.get("mentor_output", {})
-        if not isinstance(feedback, dict):
-            logger.warning("[update_skills] mentor_output is not a dict — skipping")
+        feedback_text = context.get("mentor_output", "")
+        if not feedback_text or not isinstance(feedback_text, str):
+            logger.warning("[update_skills] mentor_output is empty or not text — skipping")
             return context
 
         try:
-            update_skills(feedback, "writer")
+            update_skills(feedback_text, "writer")
             logger.info("[update_skills] Skills updated for writer")
         except SkillValidationError as e:
             logger.warning("[update_skills] Rejected: %s", e)

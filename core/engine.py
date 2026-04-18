@@ -1,4 +1,5 @@
 import logging
+import os
 
 from config.settings import validate
 from core.workflow_runtime import execute_workflow
@@ -8,8 +9,9 @@ logger = logging.getLogger(__name__)
 
 class Engine:
     def __init__(self):
+        level = getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO)
         logging.basicConfig(
-            level=logging.INFO,
+            level=level,
             format="%(levelname)s %(name)s: %(message)s",
         )
         validate()
