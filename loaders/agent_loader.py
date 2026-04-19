@@ -14,6 +14,7 @@ def load_agent(agent_name: str) -> AgentRuntime:
         raise FileNotFoundError(f"Agent config not found: {agent_yaml}")
 
     config = load_yaml(str(agent_yaml))
+    config["_agent_path"] = str(agents_path)
 
     skills_yaml = agents_path / "skills.yaml"
     skills = load_yaml(str(skills_yaml)) if skills_yaml.exists() else {}

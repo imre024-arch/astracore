@@ -16,4 +16,5 @@ def get_client(llm_prefix: str) -> LLMClient:
     if missing:
         raise ValueError(f"Missing required env vars: {missing}")
 
+    assert base_url and api_key and model  # narrowed: missing check guarantees non-None
     return OpenAIClient(base_url=base_url, api_key=api_key, model=model)

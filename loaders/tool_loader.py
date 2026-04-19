@@ -27,6 +27,9 @@ def execute_tool(tool_name: str, params: dict, context: dict) -> str:
     if tool_name == "wordpress_publish_tool":
         return _publish_to_wordpress(tool_config.get("config", {}), params, context)
 
+    if tool_name == "knowledgebase_query_tool":
+        return _query_knowledgebase(params, context)
+
     raise ValueError(f"Unknown tool: '{tool_name}'")
 
 
@@ -99,3 +102,46 @@ def _publish_to_wordpress(config: dict, params: dict, context: dict) -> str:
     post_url = response.json().get("link", "")
     logger.info("[wordpress] Published '%s': %s", title, post_url)
     return f"Published: {title}\nURL: {post_url}"
+
+
+def _query_knowledgebase(params: dict, context: dict) -> str:
+    from knowledge.graph_store import GraphStore
+
+    story_id = context.get("story_id")
+    if not story_id:
+        raise ValueError("knowledgebase_query_tool requires 'story_id' in context")
+
+    query_type = params.get("query_type", "all")
+    node_id = params.get("node_id", "").strip()
+
+    store = GraphStore(story_id)
+    try:
+        if node_id:
+            node = store.get_node(node_id)
+            if not node:
+                return f"No node found with id '{node_id}'."
+            neighbors = store.get_neighbors(node_id, direction="both")
+            lines = [f"[{node.get('type', 'Node')}] {node_id}", _format_props(node)]
+            if neighbors:
+                lines.append("Neighbors:")
+                for n in neighbors:
+                    lines.append(f"  - [{n.get('type', '?')}] {n.get('id', '')}: {n.get('name', n.get('id', ''))}")
+            return "\n".join(lines)
+
+        nodes = store.get_all_nodes() if query_type == "all" else store.get_nodes_by_type(query_type)
+        if not nodes:
+            return f"No nodes of type '{query_type}' found in the knowledge graph."
+
+        lines = [f"Knowledge graph — {query_type} ({len(nodes)} nodes):"]
+        for n in nodes:
+            lines.append(f"\n[{n.get('type', query_type)}] {n.get('id', '')}")
+            lines.append(_format_props(n))
+        return "\n".join(lines)
+    finally:
+        store.close()
+
+
+def _format_props(node: dict) -> str:
+    skip = {"id", "type"}
+    pairs = [f"  {k}: {v}" for k, v in node.items() if k not in skip and v]
+    return "\n".join(pairs) if pairs else "  (no properties)"

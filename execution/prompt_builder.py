@@ -20,8 +20,11 @@ def build_prompt(
     input_data: str,
     context: dict | None,
 ) -> str:
-    agents_path = Path(os.getenv("AGENTS_REPO_PATH"))
-    prompt_file = agents_path / "agents" / config["name"] / "prompt.txt"
+    if "_agent_path" in config:
+        prompt_file = Path(config["_agent_path"]) / "prompt.txt"
+    else:
+        agents_path = Path(os.getenv("AGENTS_REPO_PATH"))
+        prompt_file = agents_path / "agents" / config["name"] / "prompt.txt"
     template = prompt_file.read_text(encoding="utf-8")
 
     max_tokens = config.get("limits", {}).get("max_prompt_tokens", DEFAULT_MAX_TOKENS)

@@ -67,7 +67,7 @@ def validate_skill_update(feedback_text: str, agent_name: str) -> None:
 
 
 def update_skills(feedback_text: str, agent_name: str) -> None:
-    agents_path = Path(os.getenv("AGENTS_REPO_PATH"))
+    agents_path = Path(os.environ["AGENTS_REPO_PATH"])
     skills_file = agents_path / "agents" / agent_name / "skills.yaml"
 
     validate_skill_update(feedback_text, agent_name)
