@@ -39,13 +39,17 @@ def _run_agent_step(agent_name: str, context: dict) -> dict:
 
     try:
         result = agent.run(input_data, context)
-        if isinstance(result, dict):
-            context[f"{agent_name}_output"] = result
-            context["last_output"] = str(result)
+        result_str = str(result) if isinstance(result, dict) else result
+        if not result_str or not result_str.strip():
+            logger.error(
+                "[%s] LLM returned empty output — skipping context update "
+                "(last_output and last_agent preserved from previous step)",
+                agent_name,
+            )
         else:
             context[f"{agent_name}_output"] = result
-            context["last_output"] = result
-        context["last_agent"] = agent_name
+            context["last_output"] = result_str
+            context["last_agent"] = agent_name
     except PromptBudgetError as e:
         logger.warning("[%s] PromptBudgetError, skipping step: %s", agent_name, e)
     except ToolLimitExceeded as e:
@@ -64,6 +68,7 @@ def execute_action(action: str, context: dict) -> dict:
         "optional_debate":      _action_optional_debate,
         "publish_to_wordpress": _action_publish_to_wordpress,
         "save_to_graph":        _action_save_to_graph,
+        "save_scene":           _action_save_scene,
         "export_knowledge":     _action_export_knowledge,
         "build_context":        _action_build_context,
         "continuity_check":     _action_continuity_check,
@@ -165,6 +170,44 @@ def _action_save_to_graph(context: dict) -> dict:
         logger.error("[save_to_graph] Failed: %s", e)
     finally:
         store.close()
+
+    return context
+
+
+def _action_save_scene(context: dict) -> dict:
+    import os
+    from pathlib import Path
+    from knowledge.graph_store import GraphStore
+    from knowledge.graph_writer import write_to_graph
+
+    story_id = os.getenv("STORY_ID", "story_001")
+    text = context.get("last_output", "")
+    agent_name = context.get("last_agent", "unknown")
+
+    if not text:
+        logger.warning("[save_scene] No output to save (last_agent=%s)", agent_name)
+        return context
+
+    store = GraphStore(story_id)
+    try:
+        count = write_to_graph(text, agent_name, store)
+        logger.info("[save_scene] Wrote %d item(s) to graph for agent '%s'", count, agent_name)
+        context["graph_items_written"] = context.get("graph_items_written", 0) + count
+    except Exception as e:
+        logger.error("[save_scene] Graph write failed: %s", e)
+    finally:
+        store.close()
+
+    agents_path = Path(os.getenv("AGENTS_REPO_PATH", "."))
+    scenes_dir = agents_path / "knowledge" / story_id / "scenes"
+    scenes_dir.mkdir(parents=True, exist_ok=True)
+
+    scene_num = len(list(scenes_dir.glob("scene_*.md"))) + 1
+    scene_file = scenes_dir / f"scene_{scene_num}.md"
+    scene_file.write_text(text, encoding="utf-8")
+    logger.info("[save_scene] Saved %s", scene_file)
+    context["scene_file"] = str(scene_file)
+    context["scene_number"] = scene_num
 
     return context
 
